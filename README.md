@@ -13,6 +13,10 @@ on the internal network (PoC; auth config slot ready in `config/`), storage in
 and stores it next to the artifact — Star's VM reconciler verifies integrity
 before booting a qcow2 (plan §architecture, `qcow2.go`).
 
+> **OCI-only:** Zot v2 rejects docker schema2 manifests (HTTP 415). Push with
+> podman/skopeo (OCI on the wire). The Supernova engine path handles this
+> automatically (skopeo conversion).
+
 ## Layout
 
 ```
