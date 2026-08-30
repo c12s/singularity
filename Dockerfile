@@ -1,7 +1,7 @@
 FROM golang:1.23-alpine AS build
 WORKDIR /src
-COPY go.mod ./
-COPY cmd ./cmd
+COPY singularity/go.mod ./
+COPY singularity/cmd ./cmd
 RUN CGO_ENABLED=0 go build -o /singularity ./cmd/singularity
 
 FROM alpine:3.20
