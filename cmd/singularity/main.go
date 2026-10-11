@@ -40,6 +40,11 @@ func safePath(dataDir, name string) (string, error) {
 	if strings.Contains(name, "/") || strings.Contains(name, "..") || name == "" {
 		return "", fmt.Errorf("invalid artifact name %q", name)
 	}
+	// .sha256 sidecars and .tmp uploads are written by the server itself; a
+	// client must not be able to replace an artifact's checksum directly
+	if strings.HasSuffix(name, ".sha256") || strings.HasSuffix(name, ".tmp") {
+		return "", fmt.Errorf("artifact name %q uses a reserved suffix", name)
+	}
 	return filepath.Join(dataDir, name), nil
 }
 
