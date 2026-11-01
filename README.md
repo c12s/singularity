@@ -31,6 +31,12 @@ Dockerfile         file server image build
 cd tools && bash start.sh    # starts singularity (:5000) + singularity-files (:8080)
 ```
 
+In compose, `singularity` is the off-the-shelf Zot image (`ghcr.io/project-zot/zot-linux-amd64:v2.1.2`)
+with `config/zot-config.json` mounted and a persistent volume
+(`zotregistry`) for `/var/lib/registry`; `singularity-files` is this
+repository's Go file server with the `artifacts` volume. Both are plain
+HTTP on the internal network; the host ports come from `tools/.env`.
+
 ## Direct usage
 
 ```bash
@@ -45,3 +51,41 @@ curl -T disk.qcow2 http://singularity:8080/artifacts/edge-node-v1.0.qcow2
 curl -O http://singularity:8080/artifacts/edge-node-v1.0.qcow2
 curl http://singularity:8080/artifacts/edge-node-v1.0.qcow2/sha256
 ```
+
+## Status
+
+Stable for the lab: every node image and VM disk is served from here (Zot
+registry + artifact file server). Auth, TLS and garbage collection are
+deliberately out of scope for the thesis.
+
+## Bugs, disabled and unfinished features
+
+### Confirmed bugs
+
+None known in the file server; the reserved-suffix guard (review S5) and the
+sha256-sidecar write path are covered by the checksum tests in Star and were
+exercised by every VM provisioning in the lab.
+
+### Disabled / unfinished features
+
+- **No authentication anywhere** — Zot accepts anonymous push/pull and the
+  file server accepts anonymous `PUT` (review S1/S5): anyone on the node
+  network can replace an artifact's bytes. Checksums are recomputed on
+  upload, so the *sidecar cannot be forged directly* (reserved suffixes are
+  rejected), but an artifact can still be **overwritten** together with its
+  checksum — a spec without a pinned digest would trust the new checksum.
+  Lab mitigation: `cockpit vms set` requires a digest per VM.
+- **No delete/GC path**: artifacts (and old qcow2 disks, ~1.3–1.7 GB each)
+  accumulate in the `artifacts` volume; the lab only reclaims space via
+  `stop.sh --clean`.
+- **No TLS**: registry and file server are plain HTTP; nodes are configured
+  with `insecure` pulls for the lab registry (`192.168.122.1:5001`).
+- Zot auth config slot exists but is empty (`config/zot-config.json` has no
+  `http.auth` section) — enabling auth is a v2 task.
+
+### PoC boundaries (by design, not bugs)
+
+- Zot is OCI-only here: docker schema2 pushes are rejected (HTTP 415) —
+  always push via podman/skopeo (DEV-8).
+- `registry.internal:5001` appears in older node output but does not resolve;
+  use `192.168.122.1:5001` from guests, `singularity:5000` inside compose.
