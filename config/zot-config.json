@@ -1,6 +1,7 @@
 {
   "storage": {
-    "rootDirectory": "/var/lib/registry"
+    "rootDirectory": "/var/lib/registry",
+    "gc": true
   },
   "http": {
     "address": "0.0.0.0",
