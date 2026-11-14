@@ -20,7 +20,8 @@ before booting a qcow2 (plan §architecture, `qcow2.go`).
 ## Layout
 
 ```
-cmd/singularity/   file server (stdlib-only Go, PUT/GET /artifacts)
+cmd/singularity/   file server (stdlib-only Go: GET /artifacts list,
+                   PUT/GET /artifacts/{name}, GET /artifacts/{name}/sha256)
 config/zot-config.json   Zot configuration (mounted into the zot container)
 Dockerfile         file server image build
 ```
@@ -35,13 +36,19 @@ In compose, `singularity` is the off-the-shelf Zot image (`ghcr.io/project-zot/z
 with `config/zot-config.json` mounted and a persistent volume
 (`zotregistry`) for `/var/lib/registry`; `singularity-files` is this
 repository's Go file server with the `artifacts` volume. Both are plain
-HTTP on the internal network; the host ports come from `tools/.env`.
+HTTP on the internal network; the host ports come from `tools/.env` (lab:
+registry `5001`, files `8081`). Nodes reach them as `192.168.122.1:5001`
+(the image's `IMAGE_REGISTRY`) and `http://192.168.122.1:8081` (its
+`DISK_REGISTRY_URL`).
 
 ## Direct usage
 
 ```bash
 # push an OCI image (normally done by Supernova)
 podman push localhost:5000/os/edge-base:v1.0
+
+# list artifacts (JSON array of names)
+curl http://singularity:8080/artifacts
 
 # upload a qcow2 artifact
 curl -T disk.qcow2 http://singularity:8080/artifacts/edge-node-v1.0.qcow2
@@ -55,8 +62,9 @@ curl http://singularity:8080/artifacts/edge-node-v1.0.qcow2/sha256
 ## Status
 
 Stable for the lab: every node image and VM disk is served from here (Zot
-registry + artifact file server). Auth, TLS and garbage collection are
-deliberately out of scope for the thesis.
+registry + artifact file server). Zot garbage-collects blobs no tag refers
+to (`"gc": true`). Auth, TLS and artifact deletion are deliberately out of
+scope for the thesis.
 
 ## Bugs, disabled and unfinished features
 
@@ -74,10 +82,13 @@ exercised by every VM provisioning in the lab.
   upload, so the *sidecar cannot be forged directly* (reserved suffixes are
   rejected), but an artifact can still be **overwritten** together with its
   checksum — a spec without a pinned digest would trust the new checksum.
-  Lab mitigation: `cockpit vms set` requires a digest per VM.
-- **No delete/GC path**: artifacts (and old qcow2 disks, ~1.3–1.7 GB each)
-  accumulate in the `artifacts` volume; the lab only reclaims space via
-  `stop.sh --clean`.
+  Lab mitigation: `cockpit vms set` requires a digest per VM, and
+  `cockpit image apply` pins the checksum it reads when the spec is applied.
+- **No artifact delete**: the file server has no `DELETE`, so qcow2 disks
+  (~1.3–1.7 GB each) accumulate in the `artifacts` volume; the lab reclaims
+  space via `stop.sh --clean` (`tools/image-cache.sh` saves and restores
+  what is worth keeping). Registry blobs are reclaimed by Zot's GC once their
+  tag is deleted.
 - **No TLS**: registry and file server are plain HTTP; nodes are configured
   with `insecure` pulls for the lab registry (`192.168.122.1:5001`).
 - Zot auth config slot exists but is empty (`config/zot-config.json` has no
